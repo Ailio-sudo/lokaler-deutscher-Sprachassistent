@@ -73,8 +73,6 @@ Das Projekt wurde mit **Python 3.11.9** entwickelt und ausgewertet.
 - `test_system_no_zero.py`: Auswertung ohne den Intent 0 (`daten_no_zero.json`, Ordner `Plots_no_zero`).
 - Format der Rohdaten: pro Testsatz `[erkannter Intent, richtiger Intent, Dauer in Sekunden]`.
 
-Diese Skripte führen den Code beim Start direkt aus. Sie sind keine automatischen Unit-Tests; solche gibt es im Projekt nicht.
-
 ## Weiterentwicklung
 
 - **Neuen Befehl hinzufügen:** Datei in `Befehle/` anlegen; in `sprachassistent.py` importieren, Eintrag in `BEFEHLSNAMEN` und einen Zweig in `befehl_ausführen()` ergänzen; Schlüsselwörter in `systems/keyword_matching.py`; Beispielsätze in `systems/training_data.py` und den Testdaten (die Modelle in `models/self_trained/` müssen danach neu trainiert, also gelöscht werden); Parameter-Prompt in `ki_params.py`; Beschreibung im Prompt in `systems/ki_gemma.py`. Alle Auswertungsdaten müssten neu berechnet werden.
