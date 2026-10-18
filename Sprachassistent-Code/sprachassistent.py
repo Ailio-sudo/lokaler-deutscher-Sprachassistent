@@ -15,28 +15,6 @@ Die grafische Oberfläche läuft in einem eigenen Thread und erhält ihre Nachri
 Beim Beenden werden alle geladenen Ollama-Modelle entladen.
 """
 
-# ======================================================================
-#  KENNZEICHNUNG DER HERKUNFT
-#
-#  Basis dieser Datei ist DEIN ursprünglicher Code: Imports, regex_params, text_verarbeitung mit den
-#  fünf System-Blöcken, befehl_ausführen, Main und __main__. Die GUI wurde in diesen Code eingefügt.
-#  Wo eine Original-Zeile ersetzt werden musste, steht sie unverändert als Kommentar «# ORIGINAL: ...»
-#  direkt über der neuen Zeile.
-#
-#  Alles OHNE Kennzeichnung ist [ORIGINAL] = von dir geschrieben.
-#
-#  [KI-GUI]    Bereich, der die grafische Oberfläche (tkinter) betrifft, von Claude erzeugt.
-#  [KI-LOGIK]  Bereich, der von Claude ergänzt wurde und KEINE Oberfläche zeichnet, aber für die
-#              gewünschten Funktionen nötig ist (Systeme vorab laden, Intent-/Parameter-Zeitmessung,
-#              alle Ollama-Modelle entladen).
-#  [KI-ZEILE]  einzelne von Claude eingefügte Zeile(n) innerhalb von sonst originalem Code
-#              (fast immer ein melde(...)-Aufruf, der die GUI informiert).
-#
-#  Ganze Bereiche sind so eingerahmt:
-#      # >>>>>> [KI-GUI] START ...
-#      # <<<<<< [KI-GUI] ENDE
-# ======================================================================
-
 print("ASR Laden...")
 # Hinweis: Mit «import *» importierte Namen können sich gegenseitig überschreiben; deshalb stehen die Star-Imports gesammelt am Anfang
 from ASR import *   # liefert auch gui_queue und melde

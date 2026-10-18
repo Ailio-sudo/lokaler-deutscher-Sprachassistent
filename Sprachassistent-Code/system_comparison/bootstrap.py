@@ -231,10 +231,10 @@ def calculate_confidence_intervals_f1(f1_lists):
 
 # 1. Bootstrap für Vergleich der Systeme OHNE Fehler
 # Anzahl Bootstrap-Stichproben: hier 10**6. Die Ergebnisse sind im Kommentar am Dateiende.
-data_ohne_fehler = create_bootstrap_data(10**2)
+data_ohne_fehler = create_bootstrap_data(10**6)
 
 # 2. Bootstrap für Vergleich MIT und OHNE Fehler
-data_mit_fehler = create_bootstrap_data_fehler(10**2)
+data_mit_fehler = create_bootstrap_data_fehler(10**6)
 
 
 ###########################################
@@ -276,7 +276,7 @@ print(calculate_confidence_intervals_f1(data_mit_fehler[2]))
 
 
 
-# Tabelle 1: Macro-F1, 10⁶ Bootstrap-Stichproben
+# Tabelle 1: Macro-F1, 10^6 Bootstrap-Stichproben
 
 # System	F1 ohne Fehler [95-%]	F1 mit Fehler [95-%]	ΔF1 (ohne − mit)	p-Wert
 # ifelse	0.719 [0.697, 0.738]	0.586 [0.562, 0.607]	+0.133	< 1e-6
@@ -287,7 +287,7 @@ print(calculate_confidence_intervals_f1(data_mit_fehler[2]))
 
 # Tabelle 2: Paarweiser Systemvergleich ohne Fehler
 
-# Paar	ΔF1 (real)	p-Wert
+# Paar	ΔF1 (beobachteter Wert)	p-Wert
 # ifelse − tfidf	−0.178	< 1e-6
 # ifelse − word_embeds	−0.155	< 1e-6
 # ifelse − sentence_embeds	−0.211	< 1e-6
@@ -298,5 +298,3 @@ print(calculate_confidence_intervals_f1(data_mit_fehler[2]))
 # word_embeds − sentence_embeds	−0.056	< 1e-6
 # word_embeds − ki	−0.103	< 1e-6
 # sentence_embeds − ki	−0.047	< 1e-6
-
-# Falls du die Tabellen als Excel- oder Word-Datei brauchst, erstelle ich sie gerne.
