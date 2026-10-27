@@ -24,7 +24,7 @@ ORS_KEY = None #Registriere dich bei OpenRouteService.org und erstelle einen kos
 STANDARD_STADT = None #Stadt die Standardmässig bei einer Wetteranfrage verwendet werden soll)
 
 
-MICROPHONE_INDEX = 2 #Index des Standard Mikrofons, das Verwendet werden soll
+MICROPHONE_INDEX = None #Index des Standard Mikrofons, das Verwendet werden soll
 
 #Verwendete KI Modelle
 MODELL_SMALL = "qwen2.5:1.5b-instruct" #Für Parameterextraktion und Recherchieren-Befehl
