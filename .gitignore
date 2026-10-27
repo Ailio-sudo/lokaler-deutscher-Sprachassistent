@@ -1,0 +1,29 @@
+
+# Python Cache
+__pycache__/
+*.py[cod]
+
+# Persönliche Daten
+user_data.py
+arbeitsjournal.txt
+
+# Umgebungsvariablen und Geheimnisse
+.env
+.env.*
+!.env.example
+
+# Lokale Konfiguration
+config.local.json
+
+# Lokale Entwicklungsdateien
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# VENV
+sprachassistentenv/
+
+# Models
+models/

@@ -26,5 +26,6 @@ STANDARD_STADT = None #Stadt die Standardmässig bei einer Wetteranfrage verwend
 
 MICROPHONE_INDEX = 2 #Index des Standard Mikrofons, das Verwendet werden soll
 
+#Verwendete KI Modelle
 MODELL_SMALL = "qwen2.5:1.5b-instruct" #Für Parameterextraktion und Recherchieren-Befehl
 MODELL_LARGE = "gemma4:e4b" #Für KI-Klassifikationssystem
