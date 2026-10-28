@@ -70,7 +70,6 @@ Das Projekt wurde mit **Python 3.11.9** entwickelt und ausgewertet.
 - `test_dataset.py`: fehlerfreier und fehlerhafter Testdatensatz. `systems/training_data.py`: Trainings- und Validierungsdaten.
 - `python test_system.py`: erstellt aus `daten.json` alle Plots (SVG, Ordner `Plots`). Das Berechnen der Rohdaten (`create_data`) ist im Block `__main__` auskommentiert, da es lange dauert.
 - `python bootstrap.py`: Paired-Bootstrap-Test und Konfidenzintervalle (aktuell mit 10**2 Stichproben; die Ergebnisse im Kommentar am Dateiende stammen laut Kommentar aus 10**6).
-- `test_system_no_zero.py`: Auswertung ohne den Intent 0 (`daten_no_zero.json`, Ordner `Plots_no_zero`).
 - Format der Rohdaten: pro Testsatz `[erkannter Intent, richtiger Intent, Dauer in Sekunden]`.
 
 ## Weiterentwicklung
