@@ -12,11 +12,11 @@ Ablauf einer Anfrage (Funktion Main -> text_verarbeitung):
   (befehl_ausführen, Dateien im Ordner Befehle) -> Antwort per Sprachausgabe (TextToSpeech.py).
 
 Die grafische Oberfläche läuft in einem eigenen Thread und erhält ihre Nachrichten über gui_queue (siehe Gui.ereignis).
+Der Stopp-Knopf (in beiden Fenstern, auch Esc) beendet die aktuelle Anfrage sofort (siehe abbruch.py).
 Beim Beenden werden alle geladenen Ollama-Modelle entladen.
 """
 
 print("ASR Laden...")
-# Hinweis: Mit «import *» importierte Namen können sich gegenseitig überschreiben; deshalb stehen die Star-Imports gesammelt am Anfang
 from ASR import *   # liefert auch gui_queue und melde
 print("Befehle Laden...")
 from Befehle.bildschirmhelligkeit import *
@@ -45,28 +45,55 @@ import ollama
 pygame.init()
 
 # Standardbibliothek NACH den Star-Imports, damit nichts überschrieben wird
-import math                          # [KI-ZEILE] für die Animationen
+import math                          # für die Animationen
 import os
 import queue
-import sys                           # [KI-ZEILE] für sys.setswitchinterval (siehe unten)
+import sys                           # für sys.setswitchinterval (siehe unten)
 import threading
-import tkinter as tk                 # [KI-GUI] ORIGINAL: «import tkinter» und «from tkinter import ttk»
-from time import perf_counter        # [KI-ZEILE] für die Zeitmessung
+import tkinter as tk
+from time import perf_counter        # für die Zeitmessung
 
+import abbruch                       # gemeinsamer Abbruch-Zustand (Stopp-Knopf)
 from ki_params import llm_params
 
-# >>>>>> [KI-GUI] START: Animation flüssiger machen
 # Gibt dem GUI-Thread öfter die Chance zu zeichnen, auch wenn ein Modell rechnet
 sys.setswitchinterval(0.001)
-# <<<<<< [KI-GUI] ENDE
 
 # Globaler Zustand: methoden = Namen der aktuell aktivierten Systeme; do_befehl = erkannten Befehl wirklich ausführen?
 methoden = ["Keyword Matching"] # Mögliche Systeme
-# ORIGINAL: gui_queue = queue.Queue()
-# -> gui_queue und melde() kommen jetzt aus ASR.py (from ASR import *), damit ASR.py und diese Datei
-#    dieselbe Queue benutzen. Die Queue transportiert jetzt einzelne Ereignisse statt einer Ergebnis-Liste.
+# gui_queue und melde() kommen aus ASR.py (from ASR import *), damit ASR.py und diese Datei dieselbe Queue benutzen.
+# Die Queue transportiert einzelne Ereignisse.
 do_befehl = False
-gui_bereit = threading.Event()   # [KI-GUI] wird gesetzt, sobald (Systeme geladen und) GUI offen ist
+gui_bereit = threading.Event()   # wird gesetzt, sobald (Systeme geladen und) GUI offen ist
+
+
+# ======================================================================
+#  Abbruch (Stopp-Knopf)
+# ======================================================================
+_melde_original = melde
+
+
+def melde(*args):
+    """Wie ASR.melde, beendet aber eine abgebrochene Anfrage (jede Meldung ist ein Prüfpunkt)."""
+    abbruch.pruefen()
+    _melde_original(*args)
+
+
+def stoppe_ausgabe():
+    """Stoppt den Signalton (pygame). Die Sprachausgabe stoppt sich selbst (siehe TextToSpeech.py)."""
+    try:
+        pygame.mixer.stop()
+        pygame.mixer.music.stop()
+    except Exception:
+        pass
+
+
+def stopp_anfrage():
+    """Wird vom Stopp-Knopf (und Esc) aufgerufen."""
+    print("Stopp gedrückt")
+    abbruch.stoppen()
+    stoppe_ausgabe()
+
 
 def regex_params(intent, text):
     """Bestimmt die Parameter zu einem erkannten Befehl.
@@ -78,9 +105,8 @@ def regex_params(intent, text):
     return llm_params(intent, text)
 
 
-# >>>>>> [KI-GUI] START: Anzeigenamen der Befehle (Original zeigte nur «[0]»)
 # ======================================================================
-#  Befehlsnamen (für die Anzeige statt "[0]")
+#  Befehlsnamen (für die Anzeige)
 # ======================================================================
 # Anzeigenamen der Befehlsnummern (nur für die Anzeige in der GUI)
 BEFEHLSNAMEN = {
@@ -108,18 +134,15 @@ def befehl_beschreiben(befehl):
     name = BEFEHLSNAMEN.get(nr, "Unbekannter Befehl")
     param_text = ", ".join(str(p) for p in params) if params else "keine"
     return f"{nr}: {name}\nParameter: {param_text}"
-# <<<<<< [KI-GUI] ENDE
 
 
-# >>>>>> [KI-LOGIK] START: Systeme vorab laden (Vorbereitung), Zeitmessung, Ollama-Modelle entladen
 # ======================================================================
 #  Systeme vorbereiten
 # ======================================================================
-# Im Original wurde jedes System erst bei der ersten Benutzung importiert (die «from ... import ...»-Zeilen
-# mitten in text_verarbeitung), was beim ersten Befehl lange dauerte. system_vorbereiten() führt dieselben
-# Imports schon beim Start aus und macht einen Probelauf. Die Imports in text_verarbeitung bleiben unverändert
-# stehen, sind danach aber nur noch ein Zugriff auf den Python-Import-Cache.
-SYSTEME = [                                  # gleiche Liste und Reihenfolge wie «systeme» im Original-window()
+# system_vorbereiten() führt die Imports der Systeme schon beim Start aus und macht einen Probelauf,
+# damit der erste Befehl nicht lange dauert. Die Imports in text_verarbeitung sind danach nur noch
+# ein Zugriff auf den Python-Import-Cache.
+SYSTEME = [
     "Keyword Matching",
     "TF-IDF",
     "Word Embeddings",
@@ -198,7 +221,7 @@ def vorbereiten_starten(namen, fertig=None):
 #  Zeitmessung: Intent-Erkennung und Parameter-Extraktion getrennt
 # ======================================================================
 def messen_intent_params(name, intent_fn, text):
-    """Führt die ORIGINAL-Logik «regex_params(intent_fn(), text)» aus, misst aber beide Schritte getrennt.
+    """Führt «regex_params(intent_fn(), text)» aus, misst aber beide Schritte getrennt.
     Fehler in einem System ergeben [0] (und eine Fehlermeldung in der GUI)."""
     melde("system_start", name)
     try:
@@ -268,12 +291,14 @@ def modelle_entladen():
             print(f"Entladen von {name} fehlgeschlagen: {e}")
 
 
-
 # ======================================================================
-#  Textverarbeitung            [ORIGINAL-Funktion, mit KI-Zeilen für die GUI]
+#  Textverarbeitung
 # ======================================================================
-def text_verarbeitung(text):
+def _text_verarbeitung(text):
     """Verarbeitet einen Satz vollständig: Intent erkennen, Parameter bestimmen und (falls gewünscht) den Befehl ausführen.
+
+    Läuft in einem Worker-Thread (gestartet von text_verarbeitung). Nach einem Stopp löst die nächste
+    Meldung (melde) abbruch.Abbruch aus und beendet die Funktion.
 
     Parameter:
         text: Der Satz (transkribiert oder eingetippt). Ist er leer oder None, wird nur eine Rückfrage ausgegeben.
@@ -282,68 +307,52 @@ def text_verarbeitung(text):
     Nur wenn genau ein System aktiv ist und «do_befehl» gesetzt ist, wird der erkannte Befehl ausgeführt (befehl_ausführen),
     die Antwort angezeigt und vorgelesen. Befehle ohne Rückgabetext werden nicht vorgelesen.
     """
-    # Text verarbeiten und Intent bestimmen
-
     # Leere Nachricht (ASR.Record() liefert None, wenn nichts verstanden wurde)
-    if not text:                                   # ORIGINAL: if text == "":
+    if not text:
         output = "Ich konnte dich nicht verstehen. Bitte wiederhole deine Nachricht."
         print(output)
-        melde("zustand", "idle")                   # [KI-ZEILE]
+        melde("zustand", "idle")
         if do_befehl:
-            melde("ausgabe", output)               # [KI-ZEILE] erst anzeigen, dann sprechen
+            melde("ausgabe", output)               # erst anzeigen, dann sprechen
             TTS(output)
         return
 
-    t_gesamt = perf_counter()                      # [KI-ZEILE] Gesamtzeit
-    melde("input", text)                           # [KI-ZEILE]
-    melde("runde_start", list(methoden))           # [KI-ZEILE]
-    melde("zustand", "verarbeiten")                # [KI-ZEILE]
+    t_gesamt = perf_counter()                      # Gesamtzeit
+    melde("input", text)
+    melde("runde_start", list(methoden))
+    melde("zustand", "verarbeiten")
 
     # Ausgewählte Systeme verwenden
     befehle = []
-    # In jedem Block bleibt die ORIGINAL-Logik erhalten; die Zeile mit messen_...() macht dasselbe wie die
-    # ORIGINAL-Zeile darüber, nur dass Intent und Parameter getrennt gemessen und der GUI gemeldet werden.
     if "Keyword Matching" in methoden:
-        from systems.keyword_matching import if_else      # ORIGINAL: from if_else import if_else (Pfad von dir angepasst)
+        from systems.keyword_matching import if_else
         #print("Gewähltes Modell: Keyword Matching")
-        # ORIGINAL: befehle.append(("Keyword Matching", regex_params(if_else(text), text)))
-        befehle.append(("Keyword Matching", messen_intent_params("Keyword Matching", lambda: if_else(text), text)))   # [KI-ZEILE]
+        befehle.append(("Keyword Matching", messen_intent_params("Keyword Matching", lambda: if_else(text), text)))
     if "TF-IDF" in methoden:
-        from systems.tf_idf import predict_intent         # ORIGINAL: from tf_idf import predict_intent (Pfad von dir angepasst)
+        from systems.tf_idf import predict_intent
         #print("Gewähltes Modell: TF-IDF")
-        # ORIGINAL: befehle.append(("TF-IDF", regex_params(predict_intent(text)[0], text)))
-        befehle.append(("TF-IDF", messen_intent_params("TF-IDF", lambda: predict_intent(text)[0], text)))   # [KI-ZEILE]
+        befehle.append(("TF-IDF", messen_intent_params("TF-IDF", lambda: predict_intent(text)[0], text)))
     if "Word Embeddings" in methoden:
-        from systems.word_embeds import word_embeddings   # ORIGINAL: from word_embeds import word_embeddings (Pfad von dir angepasst)
+        from systems.word_embeds import word_embeddings
         #print("Gewähltes Modell: Word Embeddings")
-        # ORIGINAL: befehle.append(("Word Embeddings", regex_params(int(word_embeddings(text)[0]), text)))
-        befehle.append(("Word Embeddings", messen_intent_params("Word Embeddings", lambda: int(word_embeddings(text)[0]), text)))   # [KI-ZEILE]
+        befehle.append(("Word Embeddings", messen_intent_params("Word Embeddings", lambda: int(word_embeddings(text)[0]), text)))
         #print(" Word Embeds ", text, word_embeddings(text))
     if "Sentence Embeddings" in methoden:
-        from systems.sentence_embeds import sentence_embeddings   # ORIGINAL: from sentence_embeds import sentence_embeddings (Pfad von dir angepasst)
+        from systems.sentence_embeds import sentence_embeddings
         #print("Sentence Embeds", text, sentence_embeddings(text))
-        # ORIGINAL: befehle.append(("Sentence Embeddings", regex_params(int(sentence_embeddings(text)[0]), text)))
-        befehle.append(("Sentence Embeddings", messen_intent_params("Sentence Embeddings", lambda: int(sentence_embeddings(text)[0]), text)))   # [KI-ZEILE]
+        befehle.append(("Sentence Embeddings", messen_intent_params("Sentence Embeddings", lambda: int(sentence_embeddings(text)[0]), text)))
     if "KI (gemma)" in methoden:
-        from systems.ki_gemma import ki_local             # ORIGINAL: from KI_LOCAL_MODEL import ki_local (Pfad von dir angepasst)
+        from systems.ki_gemma import ki_local
         print("Gewähltes Modell: KI (gemma)")
-        # ORIGINAL: befehle.append(("KI (gemma)", ki_local(text)))
-        befehle.append(("KI (gemma)", messen_gesamt("KI (gemma)", lambda: ki_local(text))))   # [KI-ZEILE]
+        befehle.append(("KI (gemma)", messen_gesamt("KI (gemma)", lambda: ki_local(text))))
 
     print("Von Modellen erkannte Befehle:", befehle)
     print("Transkribierter Text:", text)
 
-    # Ergebnisse für GUI formatieren
-    # ORIGINAL (ersetzt: die GUI bekommt ihre Daten jetzt über die melde(...)-Aufrufe oben):
-    # ergebnisse = []
-    # for system, befehl in befehle:
-    #     ergebnisse.append({"system": system, "input": text, "output": befehl})
-    # gui_queue.put(ergebnisse)
-
     # Befehl ausführen, wenn nur ein System aktiv ist
     if len(methoden) == 1 and do_befehl:
         befehl = befehle[0][1]
-        melde("zustand", "ausfuehren")             # [KI-ZEILE]
+        melde("zustand", "ausfuehren")
         if befehl == [0]:
             output = "Dies scheint kein gültiger Befehl zu sein!"
         else:
@@ -353,24 +362,57 @@ def text_verarbeitung(text):
                 output = f"Fehler beim Ausführen des Befehls: {e}"
 
         # Ausgabe zuerst im Fenster anzeigen, damit man während der Sprachausgabe mitlesen kann
-        melde("ausgabe", str(output) if output is not None else "(keine Sprachausgabe)")   # [KI-ZEILE]
+        melde("ausgabe", str(output) if output is not None else "(keine Sprachausgabe)")
         # Ausgabe über TTS
         if output is not None:
             TTS(output)
     else:
-        melde("ausgabe", None)                     # [KI-ZEILE] keine Ausführung -> Hinweistext im Fenster
+        melde("ausgabe", None)                     # keine Ausführung -> Hinweistext im Fenster
         output = befehle
 
     print(output)
-    melde("zustand", "idle")                       # [KI-ZEILE]
-    melde("fertig", perf_counter() - t_gesamt)     # [KI-ZEILE]
+    melde("zustand", "idle")
+    melde("fertig", perf_counter() - t_gesamt)
 
 
-# >>>>>> [KI-GUI] START: gesamte grafische Oberfläche (Farben, Hilfsklassen, Karten, Ladebildschirm,
-#        Hauptfenster Gui, Mini-Fenster, window()).
-#        Das ursprüngliche window() (laut deinem Kommentar «grösstenteils KI generiert») mit
-#        ttk-Checkboxen, Text-Feld und queue_prüfen() wurde komplett durch diese Version ersetzt.
-#        Der Funktionsname window() und der Start über einen Thread in Main() blieben gleich.
+def _lauf(nr, text):
+    """Rumpf des Worker-Threads: ordnet den Thread der Anfrage zu und fängt Abbruch und Fehler ab."""
+    abbruch.anfrage_setzen(nr)
+    try:
+        _text_verarbeitung(text)
+    except abbruch.Abbruch:
+        pass
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        if abbruch.gueltig():
+            _melde_original("zustand", "idle")
+
+
+def _abgebrochen():
+    """Meldet der GUI, dass die Anfrage abgebrochen wurde (Aufruf im Aufrufer-Thread, nicht im Worker)."""
+    stoppe_ausgabe()
+    melde("abgebrochen")
+    melde("zustand", "idle")
+    print("Anfrage abgebrochen")
+
+
+def text_verarbeitung(text):
+    """Startet die Verarbeitung in einem Worker-Thread und kehrt bei Stopp sofort zurück.
+
+    Der Worker läuft nach einem Stopp ggf. noch kurz im Hintergrund weiter (ein bereits rechnendes Modell
+    lässt sich nicht unterbrechen); seine Meldungen werden aber verworfen und sein Ergebnis nicht mehr verwendet.
+    """
+    nr = abbruch.aktuell()
+    worker = threading.Thread(target=_lauf, args=(nr, text), daemon=True)
+    worker.start()
+    while worker.is_alive():
+        worker.join(0.05)
+        if abbruch.aktuell() != nr:
+            _abgebrochen()
+            return
+
+
 # ======================================================================
 #  GUI
 # ======================================================================
@@ -394,6 +436,20 @@ def mische(c1, c2, t):
 def zeit_format(sekunden):
     """Wissenschaftliche Notation mit 4 signifikanten Stellen, z. B. 3.214e-06 s."""
     return f"{sekunden:.3e} s"
+
+
+STOPP_PLATZ = dict(relx=1.0, rely=1.0, x=-10, y=-10, anchor="se")   # Position unten rechts in der Status-Animation
+
+
+def stopp_knopf(root, eltern):
+    """Erstellt den roten Stopp-Knopf (Esc löst ihn ebenfalls aus). Er wird erst bei Aktivität angezeigt
+    (siehe Gui.setze_zustand)."""
+    btn = tk.Button(eltern, text="■ Stopp", command=stopp_anfrage, bg=F["err"], fg="white",
+                    activebackground=mische(F["err"], "#ffffff", 0.2), activeforeground="white",
+                    relief="flat", font=("Segoe UI", 10, "bold"), padx=14, pady=4,
+                    cursor="hand2")
+    root.bind("<Escape>", lambda e: stopp_anfrage())
+    return btn
 
 
 class Tooltip:
@@ -708,7 +764,7 @@ class Splash:
 
 
 class Gui:
-    """Hauptfenster des Testmodus: links Statusanzeige, Eingabe/Ausgabe, Texteingabe und Schalter «Befehl ausführen»,
+    """Hauptfenster des Testmodus: links Statusanzeige (mit Stopp-Knopf), Eingabe/Ausgabe, Texteingabe und Schalter «Befehl ausführen»,
     rechts eine Karte pro System mit Schalter, Dauer und Ergebnis.
     """
     ZUSTAENDE = {
@@ -771,6 +827,7 @@ class Gui:
         self.status_canvas = tk.Canvas(status_rahmen, height=124, bg=F["card"],
                                        highlightthickness=0)
         self.status_canvas.pack(fill="x")
+        self.stopp_btn = stopp_knopf(root, self.status_canvas)   # Stopp-Knopf (nur sichtbar bei Aktivität)
         Tooltip(self.status_canvas, "Zeigt, was der Assistent gerade macht: warten, zuhören, "
                                     "transkribieren, Befehl erkennen oder ausführen.")
 
@@ -869,9 +926,14 @@ class Gui:
         t.yview_moveto(0)
 
     def setze_zustand(self, zustand):
-        """Setzt den Zustand der Status-Animation (siehe ZUSTAENDE) und merkt sich den Startzeitpunkt."""
+        """Setzt den Zustand der Status-Animation (siehe ZUSTAENDE), merkt sich den Startzeitpunkt
+        und zeigt den Stopp-Knopf nur an, wenn der Assistent nicht im Zustand «idle» ist."""
         self.zustand = zustand
         self.zustand_start = perf_counter()
+        if zustand == "idle":
+            self.stopp_btn.place_forget()
+        else:
+            self.stopp_btn.place(**STOPP_PLATZ)
 
     def ereignis(self, e):
         """Verarbeitet eine Nachricht aus gui_queue. Eine Nachricht ist ein Tupel (Typ, Daten...). Bekannte Typen:
@@ -882,6 +944,7 @@ class Gui:
           system_start (Name) / phase (Name, "intent", "parameter" oder "gesamt") - ein System rechnet
           prep_start (Name) / prep_done (Name, Dauer) - ein System wird geladen
           system_done (Name, Befehl, Zeiten) / system_fehler (Name, Text) - Ergebnis eines Systems
+          abgebrochen - die Anfrage wurde mit dem Stopp-Knopf beendet
           fertig (Gesamtdauer) - Verarbeitung abgeschlossen
         """
         typ = e[0]
@@ -936,6 +999,15 @@ class Gui:
             k.setze("fehler")
             k._setze_zeit("–", F["err"])
             k.ergebnis.config(text=f"Fehler: {e[2]}", fg=F["err"])
+        elif typ == "abgebrochen":
+            self.gesamt_lbl.config(text="Abgebrochen")
+            self.setze_ausgabe("Anfrage abgebrochen", F["warn"])
+            for k in self.karten.values():
+                if k.zustand in ("wartet", "laeuft"):
+                    k.in_runde = False
+                    k.setze("bereit")
+                    k.ergebnis.config(text="")
+                    k.split_lbl.config(text="")
         elif typ == "fertig":
             self.gesamt_lbl.config(text=f"Gesamtzeit: {zeit_format(e[1])}")
             fertige = [k for k in self.karten.values() if k.dauer is not None]
@@ -1016,7 +1088,7 @@ class Gui:
 
 class MiniGui(Gui):
     """Minimales Fenster für den Ein-System-Modus: nur die Status-Animation
-    (Zuhören, Transkribieren, Verarbeiten, Ausführen) und sonst nichts."""
+    (Zuhören, Transkribieren, Verarbeiten, Ausführen) und der Stopp-Knopf, sonst nichts."""
 
     def __init__(self, root):
         # bewusst kein Gui.__init__: keine Karten, Eingabefelder oder Texte
@@ -1034,11 +1106,12 @@ class MiniGui(Gui):
         rahmen.pack(fill="both", expand=True, padx=14, pady=14)
         self.status_canvas = tk.Canvas(rahmen, height=124, bg=F["card"], highlightthickness=0)
         self.status_canvas.pack(fill="both", expand=True)
+        self.stopp_btn = stopp_knopf(root, self.status_canvas)   # Stopp-Knopf (nur sichtbar bei Aktivität)
         self.tick()
 
     def ereignis(self, e):
         """Beachtet nur Nachrichten vom Typ «zustand»; alle anderen werden in diesem Fenster ignoriert."""
-        if e[0] == "zustand":                 # alle anderen Events werden ignoriert
+        if e[0] == "zustand":
             self.setze_zustand(e[1])
 
 
@@ -1059,13 +1132,13 @@ def window(mini=False):
 
     def fenster_schliessen():
         """Beendet das Programm sauber: Modelle entladen, Audiostream schliessen, Prozess beenden."""
-        print("\nBeende Programm")                 # [ORIGINAL] aus dem alten fenster_schliessen()
-        modelle_entladen()                         # [KI-LOGIK] ersetzt die zwei festen ollama.chat(...)-Blöcke
-        print("Beende Audioaufnahme")              # [ORIGINAL]
-        stream.stop_stream()                       # [ORIGINAL]
-        stream.close()                             # [ORIGINAL]
-        pyaudio_PyAudio.terminate()                # [ORIGINAL] (von dir umbenannt)
-        os._exit(0)                                # [ORIGINAL]
+        print("\nBeende Programm")
+        modelle_entladen()
+        print("Beende Audioaufnahme")
+        stream.stop_stream()
+        stream.close()
+        pyaudio_PyAudio.terminate()
+        os._exit(0)
 
     fenster.protocol("WM_DELETE_WINDOW", fenster_schliessen)
 
@@ -1118,9 +1191,6 @@ def window(mini=False):
         gui = Gui(fenster, list(SYSTEME), systeme_geaendert, text_senden, setze_do_befehl)
         gui_bereit.set()
 
-    # (Das Laden des Parameter-LLM aus deiner Version, regex_params(1, "Mach 5 Prozent heller"),
-    #  steht jetzt in llm_vorbereiten() und läuft hinter dem Ladebildschirm.)
-
     # 1) Zuerst alle Systeme laden (Ladebildschirm), 2) dann das echte GUI öffnen
     print("Systeme werden geladen ...")
     geladen = threading.Event()
@@ -1139,7 +1209,7 @@ def window(mini=False):
 
     splash_tick()
     fenster.mainloop()
-# <<<<<< [KI-GUI] ENDE
+
 
 def befehl_ausführen(befehlinformationen):  # [befehlnummer, parameter]
     """Führt einen erkannten Befehl aus.
@@ -1304,14 +1374,14 @@ def befehl_ausführen(befehlinformationen):  # [befehlnummer, parameter]
         return "Unbekannter Befehl"
 
 
-def Main(system = None):             
+def Main(system = None):
     """Startet den Sprachassistenten und läuft in einer Endlosschleife (Wake Word -> Aufnahme -> Verarbeitung).
 
     Parameter:
         system: None = Testmodus mit GUI und allen Systemen; sonst Name eines Systems aus SYSTEME (Betriebsmodus mit Mini-Fenster).
     Beendet wird mit Strg+C oder durch Schliessen des Fensters; dabei werden Ollama-Modelle entladen und der Audiostream geschlossen.
     """
-    # None = Testmodus mit GUI, sonst gewähltes System (mit Mini-Fenster, das nur die Animationen zeigt; ORIGINAL: ohne GUI)
+    # None = Testmodus mit GUI, sonst gewähltes System (mit Mini-Fenster, das nur die Animationen zeigt)
     global do_befehl
     global methoden
 
@@ -1325,27 +1395,46 @@ def Main(system = None):
             # GUI im Testmodus starten
             thread = threading.Thread(target=window, daemon=True)
             thread.start()
-            gui_bereit.wait()                 # [KI-ZEILE] warten, bis alle Systeme geladen sind und das GUI offen ist
+            gui_bereit.wait()                 # warten, bis alle Systeme geladen sind und das GUI offen ist
         else:
-            # >>>>>> [KI-LOGIK/GUI] START: nur das gewählte System vorab laden, dann Mini-Fenster mit Animationen öffnen
+            # Nur das gewählte System vorab laden, dann Mini-Fenster mit Animationen öffnen
             print(f"System '{system}' wird geladen ...")
             system_vorbereiten(system)
             threading.Thread(target=window, kwargs={"mini": True}, daemon=True).start()
             gui_bereit.wait()
-            # <<<<<< [KI-LOGIK/GUI] ENDE
 
         print("Bereit. Sag 'Hey Jarvis' um zu starten")
 
         while True:
             # Wakeword -> Aufnahme -> Verarbeitung
-            text_verarbeitung(wait_and_Record())
+            print("...running...")
+            wait_for_wakeword()
+            # Aufnahme der aktuellen Anfrage zuordnen: ein Stopp ab jetzt bricht Zuhören/Transkribieren ab
+            abbruch.anfrage_setzen(abbruch.aktuell())
+            text = None
+            aufnahme_abgebrochen = False
+            try:
+                melde("zustand", "zuhoeren")
+                listening()                    # Signalton
+                text = Record()                # Aufnahme + Transkription
+            except abbruch.Abbruch:            # Stopp während Zuhören/Transkribieren
+                aufnahme_abgebrochen = True
+            finally:
+                abbruch.anfrage_loeschen()
+            if aufnahme_abgebrochen:
+                stoppe_ausgabe()
+                melde("abgebrochen")
+                melde("zustand", "idle")
+                print("Aufnahme abgebrochen")
+                continue
+            text_verarbeitung(text)
 
     except KeyboardInterrupt:
         print("\nBeende Programm")
 
     finally:
         # KI-Modelle entladen
-        modelle_entladen()                    # [KI-LOGIK] ORIGINAL: zwei ollama.chat(..., keep_alive=0)-Blöcke mit festen Namen
+        modelle_entladen()
 
         # Audioaufnahme beenden
         print("Beende Audioaufnahme")
@@ -1356,8 +1445,6 @@ def Main(system = None):
 
 if __name__ == "__main__":
     # System auswählen oder Testmodus starten
-    # >>>>>> [KI-LOGIK] START: Liste der Systeme + Auswahl per Nummer
-    #        (ORIGINAL: nur  auswahl = input("Welches System willst du wählen (nichts = Testmodus)")  )
     print("Verfügbare Systeme:")
     for i, n in enumerate(SYSTEME, 1):
         print(f"  {i}: {n}")
@@ -1369,7 +1456,6 @@ if __name__ == "__main__":
         auswahl = SYSTEME[int(auswahl) - 1]
     elif auswahl not in SYSTEME:
         raise SystemExit(f"Unbekanntes System: {auswahl}")
-    # <<<<<< [KI-LOGIK] ENDE
 
     Main(auswahl)
     #print(befehl_ausführen([3, 0]))

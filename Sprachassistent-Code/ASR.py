@@ -6,6 +6,9 @@ Ablauf einer Anfrage (siehe wait_and_Record):
   3. Record(): nimmt auf, bis eine Sprechpause erkannt wird (speech_recognition),
      und transkribiert die Aufnahme mit faster-whisper (Deutsch).
 
+Record() kann über den Stopp-Knopf abgebrochen werden (siehe abbruch.py): Die Aufnahme bzw. Transkription
+endet dann sofort und es wird abbruch.Abbruch ausgelöst.
+
 Wichtig: Beim Import dieser Datei werden das Whisper-Modell und das Wake-Word-Modell geladen
 und der Mikrofon-Stream geöffnet. Das kann einige Sekunden dauern.
 Das Mikrofon wird über MICROPHONE_INDEX in user_data.py gewählt. Ist dort None eingetragen,
@@ -17,6 +20,7 @@ import pyaudio
 # Unterdrückt die Willkommensmeldung von pygame in der Konsole
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 import pygame
+import abbruch
 from pathlib import Path
 from user_data import MICROPHONE_INDEX
 print("CPU für Speech To Text")
@@ -104,6 +108,22 @@ def listening():
     pygame.mixer.music.set_volume(0.6)
     pygame.mixer.music.play()
 
+
+class _AbbruchStream:
+    """Hüllt den Mikrofon-Stream ein: sobald gestoppt wurde, bricht die Aufnahme beim nächsten Block ab."""
+
+    def __init__(self, stream, nr):
+        self._stream, self._nr = stream, nr
+
+    def read(self, size):
+        if abbruch.aktuell() != self._nr:
+            raise abbruch.Abbruch()
+        return self._stream.read(size)
+
+    def close(self):
+        self._stream.close()
+
+
 def Record():
     """Nimmt eine Äusserung auf und wandelt sie in Text um.
 
@@ -111,19 +131,25 @@ def Record():
     sounds/aufnahme.wav gespeichert (wird bei jeder Aufnahme überschrieben) und mit faster-whisper
     auf Deutsch transkribiert. Die Funktion blockiert, bis die Aufnahme beendet und transkribiert ist.
     Sie wird auch für Rückfragen der Befehle verwendet (siehe Befehle/getparam.py).
+    Wird die Anfrage über den Stopp-Knopf abgebrochen, löst die Funktion abbruch.Abbruch aus.
 
     Rückgabe:
         Den erkannten Text (str) oder None, wenn kein Text erkannt wurde.
     """
+    nr = abbruch.meine_nr()
+    abbruch.pruefen(nr)
+
     # Sprache aufnehmen und erkennen
     recognizer = sr.Recognizer()
     recognizer.pause_threshold = 1.5 # Pause zwischen Wörtern
 
     recognizer.non_speaking_duration = 1.5 # Aufnahmezeit nachdem der Nutzer aufhörte zu sprechen
 
-    # Zuhören solange Nutzer spricht
+    # Zuhören solange Nutzer spricht (bei Stopp bricht _AbbruchStream die Aufnahme ab)
     with sr_Microphone as microphone:
+        microphone.stream = _AbbruchStream(microphone.stream, nr)
         audio = recognizer.listen(microphone)
+    abbruch.pruefen(nr)
 
     #Audio speichern
     aufnahme_path = Path(__file__).resolve().parent/"sounds/aufnahme.wav"
@@ -131,9 +157,14 @@ def Record():
         aufnahme.write(audio.get_wav_data())
     melde("zustand", "transkribieren") # Zustand dem GUI melden
     print("Transkribiere")
-    # Sprache transkribieren
+    # Sprache transkribieren (Segmente einzeln holen, damit zwischendurch abgebrochen werden kann)
     segments, info = model.transcribe(aufnahme_path, language="de")
-    text = " ".join(segment.text.strip() for segment in list(segments))
+    teile = []
+    for segment in segments:
+        abbruch.pruefen(nr)
+        teile.append(segment.text.strip())
+    abbruch.pruefen(nr)
+    text = " ".join(teile)
     return text if text.strip() != "" else None
 
 
@@ -171,4 +202,3 @@ if __name__ == "__main__":
     # Hauptschleife
     while True:
         print(wait_and_Record())
-
