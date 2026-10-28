@@ -1087,33 +1087,51 @@ class Gui:
 
 
 class MiniGui(Gui):
-    """Minimales Fenster für den Ein-System-Modus: nur die Status-Animation
-    (Zuhören, Transkribieren, Verarbeiten, Ausführen) und der Stopp-Knopf, sonst nichts."""
+    """Minimales Fenster für den Ein-System-Modus: Status-Animation, Stopp-Knopf
+    und ein kleines Feld für die manuelle Texteingabe."""
 
-    def __init__(self, root):
-        # bewusst kein Gui.__init__: keine Karten, Eingabefelder oder Texte
+    def __init__(self, root, on_text):
+        # bewusst kein Gui.__init__: keine Karten, Texte oder Schalter
         self.root = root
+        self.on_text = on_text
         self.zustand = "idle"
         self.zustand_start = perf_counter()
         self.karten = {}                      # leer, damit Gui.tick() wiederverwendet werden kann
 
         root.title("Sprachassistent")
-        root.geometry("470x154")
+        root.geometry("470x210")              # etwas höher wegen des Eingabefelds
         root.resizable(False, False)
         root.configure(bg=F["bg"])
+
         rahmen = tk.Frame(root, bg=F["card"], highlightthickness=1,
                           highlightbackground=F["rand"])
-        rahmen.pack(fill="both", expand=True, padx=14, pady=14)
+        rahmen.pack(fill="both", expand=True, padx=14, pady=(14, 6))
         self.status_canvas = tk.Canvas(rahmen, height=124, bg=F["card"], highlightthickness=0)
         self.status_canvas.pack(fill="both", expand=True)
-        self.stopp_btn = stopp_knopf(root, self.status_canvas)   # Stopp-Knopf (nur sichtbar bei Aktivität)
+        self.stopp_btn = stopp_knopf(root, self.status_canvas)
+
+        # Manuelle Texteingabe
+        eingabe = tk.Frame(root, bg=F["bg"])
+        eingabe.pack(fill="x", padx=14, pady=(0, 12))
+        self.entry = tk.Entry(eingabe, font=("Segoe UI", 11), bg=F["card2"], fg=F["text"],
+                              insertbackground=F["text"], relief="flat",
+                              highlightthickness=1, highlightbackground=F["rand"],
+                              highlightcolor=F["accent"])
+        self.entry.pack(side="left", fill="x", expand=True, ipady=6, padx=(0, 8))
+        self.entry.bind("<Return>", lambda e: self.senden())
+        tk.Button(eingabe, text="Senden", command=self.senden, bg=F["accent"], fg="white",
+                  activebackground=mische(F["accent"], "#ffffff", 0.2), activeforeground="white",
+                  relief="flat", font=("Segoe UI", 10, "bold"), padx=14, pady=4,
+                  cursor="hand2").pack(side="left")
+
         self.tick()
+
+    # senden() wird von Gui geerbt: liest self.entry, leert es und ruft self.on_text(text) auf
 
     def ereignis(self, e):
         """Beachtet nur Nachrichten vom Typ «zustand»; alle anderen werden in diesem Fenster ignoriert."""
         if e[0] == "zustand":
             self.setze_zustand(e[1])
-
 
 def window(mini=False):
     """Erstellt und betreibt das Tk-Fenster (läuft in einem eigenen Thread, startet die Tk-Hauptschleife).
@@ -1126,7 +1144,7 @@ def window(mini=False):
     global methoden, do_befehl
     fenster = tk.Tk()
     fenster.title("Sprachassistent" if mini else "Sprachassistent – Testmodus")
-    fenster.geometry("470x154" if mini else "1120x700")
+    fenster.geometry("470x210" if mini else "1120x700")
     fenster.configure(bg=F["bg"])
 
 
@@ -1143,7 +1161,11 @@ def window(mini=False):
     fenster.protocol("WM_DELETE_WINDOW", fenster_schliessen)
 
     if mini:                                  # Ein-System-Modus: System ist schon geladen
-        MiniGui(fenster)
+        def text_senden_mini(text):
+            """Verarbeitet einen eingetippten Satz in einem eigenen Thread."""
+            threading.Thread(target=text_verarbeitung, args=(text,), daemon=True).start()
+
+        MiniGui(fenster, text_senden_mini)
         gui_bereit.set()
         fenster.mainloop()
         return
