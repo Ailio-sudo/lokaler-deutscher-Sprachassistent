@@ -19,7 +19,7 @@ Der Stand dieser Dokumentation: Oktober 2026.
 Maturaarbeit/
 ├─ setup.bat                  Installation (Python, Ollama, Modelle, danach setup.py)
 ├─ Sprachassistent.bat        Startet den Sprachassistenten
-├─ befehle.txt                Liste der 27 Befehle mit Parametern mit ihren jeweiligen
+├─ befehle.txt                Liste der 27 Befehle mit ihren jeweiligen Parametern 
 ├─ models/                    grosse Modelle (FastText, Qwen3-Embedding) und models/self_trained/ (trainierte Modelle)
 ├─ screenshots/               hier speichert der Screenshot-Befehl
 └─ Sprachassistent-Code/
