@@ -91,8 +91,9 @@ echo.
 echo Pruefe ob gemma4:e4b...
 "%OLLAMA_EXE%" list | findstr /B /C:"gemma4:e4b" >nul
 if errorlevel 1 (
-    echo gemma4:e4b nicht vorhanden, lade herunter:
-    "%OLLAMA_EXE%" pull gemma4:e4b
+    echo gemma4:e4b nicht vorhanden
+    echo Lade es manuell herunter, wenn KI-System genutzt werden soll:
+    echo "ollama pull gemma4:e4b
     if errorlevel 1 goto error
 ) else (
     echo gemma4:e4b ist bereits vorhanden.
